@@ -14,14 +14,47 @@
 
 namespace scene
 {
+	const UINT	Bee::MinSpeed = 2;
+	const UINT	Bee::MaxSpeed = 5;
+	const float Bee::LerpRate = 5.0f;
+	const float Bee::DropRate = 2.0f;
+	const XMFLOAT3	Bee::BeeScaleLimit = { 0.4f, 0.4f, 0.6f };
+	const XMFLOAT3	Bee::BeeScale = { 0.2f, 0.2f, 0.4f };
 
-	Bee::Bee()
+	const float	Bee::StomachSizeMax = 100.0f;
+	const float	Bee::NectarEatRate = 30.0f;
+
+	static const float	DefaultHeight = 5.0f; // the height the bee will return to after eating nectar
+
+	Bee::Bee(Scene* scene)
 	{
-		m_shaderType = Scene::ShaderTypes::Lit;
-		m_desiredDirection = XMVECTOR{ 0.0f,0.0f,0.0f};
+		m_currentScene = scene;
+
+		m_exitPositionWorld = XMVECTOR{ 0.0f,0.0f,0.0f };
+		m_exitPositionFlower = XMVECTOR{ 0.0f,0.0f,0.0f };
+
+		m_desiredDirection = XMVECTOR{ 0.0f,0.0f,0.0f };
 		m_flowerPosition = XMVECTOR{ 0.0f,0.0f,0.0f };
 		m_flowerDropRadius = XMVECTOR{ 4.0f,4.0f,4.0f };
 		m_flowerFinalRadius = XMVECTOR{ 0.5f,0.5f,0.5f };
+
+		m_currentFlower = NULL;
+
+		m_numVertices = 0;
+
+		m_speed = 1.0f;
+		m_defaultHeight = 5.0f;
+		m_stomachSizeCurrent = 0.0f;
+
+
+		m_isFlowerSelcted = false;
+		m_markedForDeath = false;
+		m_bellyFull = false;
+
+		m_shaderType = Scene::ShaderTypes::Lit;
+
+		m_currentMode = scene::Bee::SPAWN;
+
 	}
 
 	void Bee::Initialise()
@@ -54,16 +87,23 @@ namespace scene
 
 		m_currentMode = scene::Bee::SPAWN;
 
-		SetScale(m_BeeScale);
+		SetScale(BeeScale);
 
 	}
+
 	void Bee::Shutdown()
 	{
 		Entity::Shutdown();
 	}
+
 	void Bee::Update()
 	{
 		Entity::Update();
+
+		if (!CheckHasFlower())
+		{
+			SetTargetFlower(m_currentScene->HighNectarFlower());
+		}
 
 		switch (m_currentMode)
 		{
@@ -91,6 +131,7 @@ namespace scene
 
 
 	}
+
 	void Bee::Render()
 	{
 		// Ensure the base class is called as this sets up the shaders for drawing
@@ -111,28 +152,15 @@ namespace scene
 		context->Draw(m_numVertices, 0);
 	}
 
-	DirectX::XMVECTOR Bee::GetExitPosition()
-	{
-		return m_exitPositionWorld;
-	}
 	void Bee::SetExitPosition(DirectX::XMVECTOR position)
 	{
 		m_exitPositionWorld = position;
-		m_DefaultHeight = position.m128_f32[1];
-	}
-
-	bool Bee::CheckHasFlower()
-	{
-		return m_isFlowerSelcted;
-	}
-	bool Bee::CheckForDeathMark()
-	{
-		return m_markedForDeath;
+		m_defaultHeight = position.m128_f32[1];
 	}
 
 	void Bee::SetOrintationLarp()
 	{
-		float lerpAmount = m_lerpRate * utils::Timers::GetFrameTime();
+		float lerpAmount = LerpRate * utils::Timers::GetFrameTime();
 
 		if (lerpAmount > 1.0f)
 		{
@@ -144,26 +172,24 @@ namespace scene
 		SetOrientation(newOrientation);
 	}
 
-	void Bee::SetFlower(Flower* selectedFlower)
+	void Bee::SetTargetFlower(Flower* selectedFlower)
 	{
 		m_currentFlower = selectedFlower;
 
 		m_flowerPosition = m_currentFlower->GetPosition();		
-		m_flowerPosition.m128_f32[1] = m_DefaultHeight;
+		m_flowerPosition.m128_f32[1] = m_defaultHeight;
 		m_desiredDirection = XMVector3Normalize(m_flowerPosition - m_position);
 		SetOrintationLarp();
+		XMVECTOR newPosition = (m_position + (m_desiredDirection * m_speed) * utils::Timers::GetFrameTime());
+		SetPosition(newPosition);
 
 		m_isFlowerSelcted = true;
-	}
-	Flower* Bee::GetFlower()
-	{
-		return m_currentFlower;
 	}
 
 	/* Enum function */
 	void Bee::Spawn()
 	{
-		m_speed = (float)(utils::Rand() % 1000000) / 1000000.0f * (m_maxSpeed - m_minSpeed) + m_minSpeed;		
+		m_speed = (float)(utils::Rand() % 1000000) / 1000000.0f * (MaxSpeed - MinSpeed) + MinSpeed;
 
 		if (CheckHasFlower())
 		{
@@ -173,7 +199,7 @@ namespace scene
 	void Bee::ToFlower()
 	{
 		
-		if (m_currentFlower->IsflowerEmpty())
+		if (m_currentFlower->IsFlowerEmpty())
 		{
 			m_isFlowerSelcted = false;
 		}
@@ -183,7 +209,7 @@ namespace scene
 			if (XMVector3NearEqual(m_position, m_flowerPosition, m_flowerDropRadius))
 			{
 				m_exitPositionFlower = m_exitPositionWorld;
-				m_exitPositionFlower.m128_f32[1] = m_DefaultHeight;
+				m_exitPositionFlower.m128_f32[1] = m_defaultHeight;
 
 				m_currentMode = scene::Bee::COLLECT_NECTAR;
 			}
@@ -205,14 +231,14 @@ namespace scene
 		if (XMVector3NearEqual(m_position, m_flowerPosition, m_flowerFinalRadius))
 		{
 
-			if (m_currentFlower->IsflowerEmpty())
+			if (m_currentFlower->IsFlowerEmpty())
 			{
 				m_currentMode = scene::Bee::TO_FLOWER;
 			}
 			else
 			{
 
-				if (m_stomachSizeCurrent >= m_stomachSizeMax)
+				if (m_stomachSizeCurrent >= StomachSizeMax)
 				{
 					m_bellyFull = true;
 					m_currentMode = scene::Bee::FROM_FLOWER;
@@ -220,11 +246,12 @@ namespace scene
 				else
 				{
 					m_currentFlower->ReduceNectar();
-					m_stomachSizeCurrent += m_eatRate;
-					m_BeeScale.x = m_BeeScale.x + ((m_stomachSizeCurrent/ m_stomachSizeMax)/ m_stomachSizeMax);
-					m_BeeScale.y = m_BeeScale.y + ((m_stomachSizeCurrent / m_stomachSizeMax)/ m_stomachSizeMax);
-					m_BeeScale.z = m_BeeScale.z + ((m_stomachSizeCurrent / m_stomachSizeMax)/ m_stomachSizeMax);
-					SetScale(m_BeeScale);
+					m_stomachSizeCurrent += NectarEatRate * utils::Timers::GetFrameTime();
+
+					XMFLOAT3 newBeeScale = {	BeeScale.x + ((BeeScaleLimit.x - BeeScale.x) * (m_stomachSizeCurrent / StomachSizeMax)),
+												BeeScale.y + ((BeeScaleLimit.y - BeeScale.y) * (m_stomachSizeCurrent / StomachSizeMax)),
+												BeeScale.z + ((BeeScaleLimit.z - BeeScale.z) * (m_stomachSizeCurrent / StomachSizeMax))};
+					SetScale(newBeeScale);
 				}
 			}
 		}
@@ -232,7 +259,7 @@ namespace scene
 		{
 			if (m_flowerPosition.m128_f32[1] >= m_currentFlower->GetFlowerHeight())
 			{
-				m_flowerPosition.m128_f32[1] -= m_DropRate;
+				m_flowerPosition.m128_f32[1] -= DropRate;
 			}
 
 			m_desiredDirection = XMVector3Normalize(m_flowerPosition - m_position);
@@ -251,7 +278,7 @@ namespace scene
 		   While mantaing the same direction as the exit point */
 		if (XMVector3NearEqual(m_position, m_exitPositionFlower, m_flowerDropRadius))
 		{
-			if (m_bellyFull == false)
+			if (!m_bellyFull)
 			{
 				m_isFlowerSelcted = false;
 						
@@ -268,7 +295,7 @@ namespace scene
 		{	
 			if (m_exitPositionFlower.m128_f32[1] <= m_exitPositionWorld.m128_f32[1])
 			{
-				m_exitPositionFlower.m128_f32[1] += m_DropRate;
+				m_exitPositionFlower.m128_f32[1] += DropRate * utils::Timers::GetFrameTime();
 			}
 			m_desiredDirection = XMVector3Normalize(m_exitPositionFlower - m_position);
 			SetOrintationLarp();

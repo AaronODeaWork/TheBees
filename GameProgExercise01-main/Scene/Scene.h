@@ -4,8 +4,6 @@
 namespace scene
 {
 
-class TestObject;
-
 class GroundObject;
 class Camera;
 class Flower;
@@ -36,6 +34,7 @@ public:
 	void				Render();
 
 	void				ActivateShaders( const ShaderTypes shaderType );
+	Flower*				HighNectarFlower();
 
 private:
 	struct ShaderData
@@ -61,13 +60,12 @@ private:
 	void				UpdateFlowers();
 
 	void				SpawnBee();
-	Flower*				HighNectarFlower();
 
 
 
 	//Colours
-	CONST XMFLOAT4 GROUND_COLOUR = { 0.2f, 0.6f, 0.0f, 1.0f};
-	CONST XMFLOAT4 BEE_COLOUR = { 1.0f, 1.0f, 0.0f, 1.0f };
+	static CONST XMFLOAT4 GROUND_COLOUR;
+	static CONST XMFLOAT4 BEE_COLOUR;
 
 	// Scene Objects 
 	GroundObject*	m_groundPlane;
@@ -79,27 +77,27 @@ private:
 	// Flowers
 	XMVECTOR	m_flowerGridStart; //The flower grids origin point is its bottom left corner
 	XMVECTOR	m_flowerGridOrigin;
-	const int	m_flowersPerRow = 5; // This is used to create a N*N flower grid;
 	float		m_flowerDoubleScale;
 	float		m_flowerScale;
+	static const int	FlowersPerRow; // This is used to create a N*N flower grid;
 
 	// Ground
-	const float m_groundThickness = 1.0f;
+	static const float	GroundThickness;
 
 	// Bee
-	const int	m_minBees = 10;
-	const int	m_maxBees = 50;
-	const int	m_beeSpawnHeightMax = 8;
-	const int	m_beeSpawnHeightMin = 5;
-	const float m_minBeeSpawnRadius = 8.0f;
-	const float m_maxBeeSpawnRadius = 15.0f;
-	const float m_beeSpawnInterval = 1.0f;
+	static const int	MinBees;
+	static const int	MaxBees;
+	static const int	BeeSpawnHeightMax;
+	static const int	BeeSpawnHeightMin;
+
 	float		m_beeSpawnTimerCurrent;
 	float		m_beeSpawnTimerPrevious;
 	int			m_aliveBeeCount;
 
+	static const float	MinBeeSpawnRadius;
+	static const float	MaxBeeSpawnRadius;
+	static const float	BeeSpawnInterval;
 
-	TestObject* m_testObject1;
 };
 
 } // namespace scene

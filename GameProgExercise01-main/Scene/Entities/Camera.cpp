@@ -10,6 +10,10 @@
 
 namespace scene
 {
+	const float	Camera::MaxZoom = 50.0f;
+	const float	Camera::MinZoom = 5.0f;
+	const float	Camera::ZoomRate = 0.5f;
+	const float	Camera::CameraRotationSpeed = 50.0f;
 	Camera::Camera()
 	{									
 		// Angles for the camera ( Pitch , Yaw, Roll)
@@ -33,30 +37,36 @@ namespace scene
 
 	void Camera::Update()
 	{
-		const float frameTime = utils::Timers::GetFrameTime();
-
 		const Core* const core = Core::Get();
 		DX::View* const view = core->GetView();
-		DX::Input* input = core->GetInput();
+		DX::Input* const input = core->GetInput();
 		
+		float correctedRotationSpeed = CameraRotationSpeed *utils::Timers::GetFrameTime();
 
 		// We take in the users input and convert to radians to use with the direct X system
-		XMVECTOR userInput = XMVECTOR{	(ToRadian(input->GetUpDown()   * m_cameraRotationSpeed) )* frameTime,
-										(ToRadian(input->GetLeftRight()* m_cameraRotationSpeed) )* frameTime,
-										(ToRadian(input->GetInOut()    * m_cameraRotationSpeed) )* frameTime,
+		XMVECTOR userInput = XMVECTOR{	(-XMConvertToRadians(input->GetUpDown()   * correctedRotationSpeed) ),
+										(-XMConvertToRadians(input->GetLeftRight()* correctedRotationSpeed) ),
+										(-XMConvertToRadians(input->GetInOut()    * correctedRotationSpeed) ),
 										1.0f };
+
+		if (input->GetInOut() == 1)
+		{
+			if (m_viewOffset.m128_f32[2] <= MaxZoom)
+			{
+				m_viewOffset.m128_f32[2] += ZoomRate * utils::Timers::GetFrameTime();
+			}
+		}
+		else if (input->GetInOut() == -1)
+		{
+			if (m_viewOffset.m128_f32[2] >= MinZoom)
+			{
+				m_viewOffset.m128_f32[2] -= ZoomRate * utils::Timers::GetFrameTime();
+			}
+		}
 
 		m_cameraAngleRadians = XMVectorAdd(m_cameraAngleRadians , userInput);
 
-		// We check the Yaw to make sure its not out of bounds of the min and max radians of a circle.
-		if (m_cameraAngleRadians.m128_f32[1] < 0.0f)
-		{
-			m_cameraAngleRadians.m128_f32[1] += XM_2PI;
-		}
-		else if (m_cameraAngleRadians.m128_f32[1] > XM_2PI)
-		{
-			m_cameraAngleRadians.m128_f32[1] -= XM_2PI;
-		}
+		CheckCameraBounds();
 
 
 		XMMATRIX rotationMatrix = XMMatrixRotationRollPitchYaw(m_cameraAngleRadians.m128_f32[0], m_cameraAngleRadians.m128_f32[1], m_cameraAngleRadians.m128_f32[2]);
@@ -74,13 +84,7 @@ namespace scene
 
 	}
 
-	float Camera::ToRadian(float degree)
-	{
-		
-		return degree * (XM_PI / 180);
-	}
-
-	void Camera::checkCameraBounds()
+	void Camera::CheckCameraBounds()
 	{
 		// Pitch
 		if (m_cameraAngleRadians.m128_f32[0] < 0.0f)

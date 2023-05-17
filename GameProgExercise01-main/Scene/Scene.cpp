@@ -21,24 +21,38 @@ using namespace DirectX;
 
 namespace scene
 {
+	const float Scene::GroundThickness = 1.0f;
 
+	const float Scene::MinBeeSpawnRadius = 10.0f;
+	const float Scene::MaxBeeSpawnRadius = 25.0f;
+	const float Scene::BeeSpawnInterval = 1.0f;
+	const int	Scene::FlowersPerRow = 5; // This is used to create a N*N flower grid;
+
+	const int	Scene::MinBees = 10;
+	const int	Scene::MaxBees = 50;
+	const int	Scene::BeeSpawnHeightMax = 8;
+	const int	Scene::BeeSpawnHeightMin = 5;
+
+	const XMFLOAT4 Scene::GROUND_COLOUR = { 0.2f, 0.6f, 0.0f, 1.0f };
+	const XMFLOAT4 Scene::BEE_COLOUR = { 1.0f, 1.0f, 0.0f, 1.0f };
 Scene::Scene()
 {
+	m_aliveBeeCount = 0;
+	m_beeSpawnTimerCurrent = 0.0f;
+	m_beeSpawnTimerPrevious = 0.0f;
+	
 	// objects
 	m_groundPlane = new GroundObject();
 	m_camera = new Camera();
-
-	// bee
-	m_aliveBeeCount = 0;
 
 	// flower
 	m_flowerScale = 1.0f;
 	m_flowerDoubleScale = m_flowerScale * 2.0f;
 	m_flowerGridStart = XMVECTOR{ 0.0f, 1.0f, 0.0f };
 	// we are doing this so we always get the center of the Flower grid
-	m_flowerGridOrigin = XMVECTOR{ -((m_flowerDoubleScale * m_flowerScale) * (m_flowersPerRow - 1.0f)),
+	m_flowerGridOrigin = XMVECTOR{ -((m_flowerDoubleScale * m_flowerScale) * (FlowersPerRow - 1.0f)),
 								   0.0f,
-								 -((m_flowerDoubleScale * m_flowerScale) * (m_flowersPerRow - 1.0f)) };	
+								 -((m_flowerDoubleScale * m_flowerScale) * (FlowersPerRow - 1.0f)) };
 	
 }
 
@@ -54,6 +68,7 @@ void Scene::Initialise()
 	
 	utils::Timers::InitialiseTimers();
 	utils::Timers::StartTimer();
+
 	m_beeSpawnTimerCurrent = utils::Timers::GetFrameTime();
 	m_beeSpawnTimerPrevious = utils::Timers::GetFrameTime();
 
@@ -64,7 +79,7 @@ void Scene::Initialise()
 
 
 	m_camera->Initialise();
-	m_camera->SetOrigin(XMVectorSet(m_flowerGridOrigin.m128_f32[0], m_groundThickness, m_flowerGridOrigin.m128_f32[2], 1.0f));
+	m_camera->SetOrigin(XMVectorSet(m_flowerGridOrigin.m128_f32[0], GroundThickness, m_flowerGridOrigin.m128_f32[2], 1.0f));
 }
 
 void Scene::Shutdown()
@@ -228,14 +243,14 @@ void Scene::InitialiseGround()
 	m_groundPlane->SetColour(GROUND_COLOUR);
 	m_groundPlane->SetPosition(XMVectorSet(m_flowerGridOrigin.m128_f32[0], m_flowerGridOrigin.m128_f32[1], m_flowerGridOrigin.m128_f32[2], 0.0f));
 
-	m_groundPlane->SetScale(XMFLOAT3(((m_flowerDoubleScale * m_flowerScale) * m_flowersPerRow),
-									   m_groundThickness,
-									 ((m_flowerDoubleScale * m_flowerScale) * m_flowersPerRow)));
+	m_groundPlane->SetScale(XMFLOAT3(((m_flowerDoubleScale * m_flowerScale) * FlowersPerRow),
+										GroundThickness,
+									 ((m_flowerDoubleScale * m_flowerScale) * FlowersPerRow)));
 }
 void Scene::InitialiseFlowers()
 {
 
-	for (int i = 0; i < (m_flowersPerRow * m_flowersPerRow); i++)
+	for (int i = 0; i < (FlowersPerRow * FlowersPerRow); i++)
 	{
 		Flower* flower = new Flower();
 		m_flowerList.push_back(flower);
@@ -244,13 +259,13 @@ void Scene::InitialiseFlowers()
 	float flowerGap = m_flowerDoubleScale * m_flowerDoubleScale;
 	
 	containers::List< Flower*>::iterator iterator = m_flowerList.begin();
-	for (int i = 0; i < m_flowersPerRow; i++)
+	for (int i = 0; i < FlowersPerRow; i++)
 	{
-		for (int j = 0; j < m_flowersPerRow; j++)
+		for (int j = 0; j < FlowersPerRow; j++)
 		{
 			Flower* flower = *iterator;
 			flower->Initialise(m_flowerScale);
-			flower->RandomColour();
+			flower->SetColourByNectar();
 			flower->SetPosition(XMVectorSet((m_flowerGridStart.m128_f32[0] - (flowerGap * i)),
 											(m_flowerGridStart.m128_f32[1]),
 											(m_flowerGridStart.m128_f32[2] - (flowerGap * j)), 1.0f));
@@ -279,14 +294,14 @@ void Scene::ActivateShaders(const ShaderTypes shaderType)
 
 void Scene::UpdateBees()
 {
-	// Spawn bees here 
-	if ((m_beeSpawnTimerCurrent - m_beeSpawnTimerPrevious) >= m_beeSpawnInterval)
+	// from the running timer  check the time elapsed then update the previous time  to get the time between 
+	if ((m_beeSpawnTimerCurrent - m_beeSpawnTimerPrevious) >= BeeSpawnInterval)
 	{
-		if (m_aliveBeeCount < m_minBees)
+		if (m_aliveBeeCount < MinBees)
 		{
 			SpawnBee();
 		}
-		else if (m_aliveBeeCount < m_maxBees && (utils::Rand()% 2) == 0)
+		else if (m_aliveBeeCount < MaxBees && (utils::Rand()% 2) == 0) // adds a random element to the bee spawn so theres not a bee spawn every interval
 		{
 			SpawnBee();
 		}
@@ -302,10 +317,7 @@ void Scene::UpdateBees()
 	{
 		Bee* bee = *beeIterator;
 		bee->Update();
-		if (!bee->CheckHasFlower())
-		{
-			bee->SetFlower(HighNectarFlower());
-		}
+
 		if (bee->CheckForDeathMark())
 		{
 			bee->Shutdown();
@@ -333,20 +345,21 @@ void Scene::UpdateFlowers()
 void Scene::SpawnBee()
 {
 
-	Bee* bee = new Bee();
+	Bee* bee = new Bee(this);
+
 	bee->Initialise();
 	bee->SetColour(BEE_COLOUR);
 	
 	float angle = (float)(utils::Rand() % 1000000) / 1000000.0f * XM_2PI;
-	float distanceFromCentre = (float)(utils::Rand() % 1000000) / 1000000.0f * (m_maxBeeSpawnRadius - m_minBeeSpawnRadius) + m_minBeeSpawnRadius;
-	float beePositionX = XMScalarSin(angle) * m_maxBeeSpawnRadius;
-	float beePositionY = (float)((utils::Rand() % (m_beeSpawnHeightMax- m_beeSpawnHeightMin)) + m_beeSpawnHeightMin);
-	float beePositionZ = XMScalarCos(angle) * m_maxBeeSpawnRadius;
+	float distanceFromCentre = (float)(utils::Rand() % 1000000) / 1000000.0f * (MaxBeeSpawnRadius - MinBeeSpawnRadius) + MinBeeSpawnRadius;
+	float beePositionX = XMScalarSin(angle) * distanceFromCentre;
+	float beePositionY = (float)((utils::Rand() % (BeeSpawnHeightMax - BeeSpawnHeightMin)) + BeeSpawnHeightMin);
+	float beePositionZ = XMScalarCos(angle) * distanceFromCentre;
 
 	// TODO ADD IN A BEE HEIGHT
   	bee->SetPosition(		XMVectorSet( beePositionX + (float)m_flowerGridOrigin.m128_f32[0], beePositionY,  beePositionZ + (float)m_flowerGridOrigin.m128_f32[2], 1.0f));
 	bee->SetExitPosition(	XMVectorSet(-beePositionX + (float)m_flowerGridOrigin.m128_f32[0], beePositionY, -beePositionZ + (float)m_flowerGridOrigin.m128_f32[2], 1.0f));	
-	bee->SetFlower(HighNectarFlower());
+	bee->SetTargetFlower(HighNectarFlower());
 
 	m_beeList.push_back(bee);
 
@@ -355,8 +368,8 @@ void Scene::SpawnBee()
 
 Flower* Scene::HighNectarFlower()
 {
-	int highestNectar = 0;
-	int currentFlowerNectar = 0;
+	float highestNectar = 0;
+	float currentFlowerNectar = 0;
 
 	containers::List< Flower*>::iterator flowerIterator = m_flowerList.begin();
 	Flower* selectedFlower = *flowerIterator;
@@ -386,6 +399,7 @@ Flower* Scene::HighNectarFlower()
 
 	return selectedFlower;
 }
+
 
 
 } // namespace scene

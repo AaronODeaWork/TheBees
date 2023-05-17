@@ -19,11 +19,15 @@ namespace scene
 		void SetOrigin(XMVECTOR newOrigin);
 
 	private:
-		float ToRadian(float degree);
 			
-		void checkCameraBounds();						
+		void CheckCameraBounds();						
 
-		float		m_cameraRotationSpeed = 50.0f;
+		static const float	CameraRotationSpeed;
+
+		static const float	MaxZoom;
+		static const float	MinZoom;
+		static const float	ZoomRate;
+
 
 		XMVECTOR	m_cameraAngleRadians;
 		XMVECTOR	m_cameraPosition;

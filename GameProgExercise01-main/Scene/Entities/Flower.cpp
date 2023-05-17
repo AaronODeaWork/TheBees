@@ -9,11 +9,44 @@
 
 namespace scene
 {
+	const float Flower::FloweRespawnInterval = 0.8f;
+	const float Flower::FloweForceGrowthInterval = 10.0f;
+	const float	Flower::NectarReduction = 10.0f;
+	const XMFLOAT4 Flower::FlowerColours[NumberOfColour] =
+	{
+		{ 0.3f, 0.1f, 0.5f, 1.0f },
+		{ 0.9f, 0.2f, 0.4f, 1.0f },
+		{ 0.2f, 0.1f, 0.9f, 1.0f },
+		{ 0.9f, 0.5f, 0.1f, 1.0f }
+	};
+
+	const  float Flower::MaxNectar = 100.0f;
+	const  float Flower::MinNectar = 20.0f;
+	const  float Flower::MaxRefill = 16.0f;
+	const  float Flower::MinRefill = 8.0f;
 
 	Flower::Flower()
 	{
+		m_flowerScale = XMFLOAT3(1.0f, 1.0f, 1.0f);
+
+
+
+		m_numVertices = 0;
+		m_flowerHeight = 4.0f;
+
+		m_nectarValue = 0.0f;
+		m_PreviousNectarValue = 0.0f;
+
 		m_shaderType = Scene::ShaderTypes::Lit;
-		m_nectarValue = 0;
+
+		m_flowerSpawnTimerCurrent = 0.0f;
+		m_flowerSpawnTimerPrevious = 0.0f;
+		m_baseScale = 0.0f;
+
+		m_flowerEmpty = false;
+		m_flowerRefill = false;
+
+		m_currentColour = utils::Rand() % NumberOfColour;
 	}
 
 	void Flower::Initialise(float scale)
@@ -46,7 +79,7 @@ namespace scene
 		hr = device->CreateBuffer(&bufferDesc, &initialData, &m_vertexBuffer);
 		ASSERT_HANDLE(hr);
 
-		m_nectarValue = (utils::Rand() % (m_maxNectar - m_minNectar))+ m_minNectar;
+		m_nectarValue = (float)(utils::Rand() % (int)(MaxNectar - MinNectar)) + (int)MinNectar;
 		
 
 
@@ -56,9 +89,9 @@ namespace scene
 		m_flowerSpawnTimerPrevious = utils::Timers::GetFrameTime();
 
 		m_baseScale = scale;
-		m_flowerScale.x = m_baseScale * ((float)m_nectarValue / (float)m_maxNectar);
-		m_flowerScale.y = m_baseScale * ((float)m_nectarValue / (float)m_maxNectar);
-		m_flowerScale.z = m_baseScale * (float)(m_nectarValue / (float)m_maxNectar);
+		m_flowerScale.x = m_baseScale * (m_nectarValue / MaxNectar);
+		m_flowerScale.y = m_baseScale * (m_nectarValue / MaxNectar);
+		m_flowerScale.z = m_baseScale * (m_nectarValue / MaxNectar);
 
 		SetScale(m_flowerScale);
 
@@ -75,22 +108,24 @@ namespace scene
 		/*
 		Timer for adding a random amount of nectar to the flower, till its full again
 		*/
+
 		if (m_flowerRefill == true)
 		{
-			if ((m_flowerSpawnTimerCurrent - m_flowerSpawnTimerPrevious) >= m_flowerespawnInterval)
+
+			if ((m_flowerSpawnTimerCurrent - m_flowerSpawnTimerPrevious) >= FloweRespawnInterval)
 			{
-				if (m_nectarValue < m_maxNectar)
+				if (m_nectarValue < MaxNectar)
 				{
-					m_nectarValue += (utils::Rand() % (m_maxRefill - m_minRefill)) + m_minRefill;
-					m_flowerScale.x = m_baseScale * ((float)m_nectarValue / (float)m_maxNectar);
-					m_flowerScale.y = m_baseScale * ((float)m_nectarValue / (float)m_maxNectar);
-					m_flowerScale.z = m_baseScale * (float)(m_nectarValue / (float)m_maxNectar);
+					m_nectarValue += (utils::Rand() % (int)(MaxRefill - MinRefill)) + (int)MinRefill;
+					m_flowerScale.x = m_baseScale * (m_nectarValue / MaxNectar);
+					m_flowerScale.y = m_baseScale * (m_nectarValue / MaxNectar);
+					m_flowerScale.z = m_baseScale * (m_nectarValue / MaxNectar);
 
 					SetScale(m_flowerScale);
 				}
 				else
 				{
-					m_nectarValue = m_maxNectar;
+					m_nectarValue = MaxNectar;
 					m_flowerRefill = false;
 					m_flowerEmpty = false;
 				}
@@ -99,9 +134,22 @@ namespace scene
 			else
 			{
 				m_flowerSpawnTimerCurrent += utils::Timers::GetFrameTime();
+
 			}
+
 		}
-		
+		else if ((m_flowerSpawnTimerCurrent - m_flowerSpawnTimerPrevious) >= FloweForceGrowthInterval && m_PreviousNectarValue == m_nectarValue)
+		{
+			m_flowerRefill = true;
+			m_flowerSpawnTimerPrevious = m_flowerSpawnTimerCurrent;
+
+		}
+		else
+		{
+			m_flowerSpawnTimerCurrent += utils::Timers::GetFrameTime();
+
+		}
+
 		SetColourByNectar();
 
 	}
@@ -126,49 +174,28 @@ namespace scene
 		context->Draw(m_numVertices, 0);
 	}
 
-	int Flower::GetNectar()
-	{
-		return m_nectarValue;
-	}
-
 	void Flower::SetColourByNectar()
 	{
-		
-		
+
 		if (m_nectarValue != m_PreviousNectarValue)
 		{
-			float tempaturePercentage = ((float)m_nectarValue / (float)m_maxNectar);
-			XMFLOAT4 m_colourBase = { 1.0f, 1.0f, 1.0f, 1.0f };
 
-			switch (m_colourMode)
-			{
-			case scene::Flower::PURPLE:
-				m_colourBase = m_colourBasePurple;
-				break;
-			case scene::Flower::RED:
-				m_colourBase = m_colourBaseRed;
-				break;
-			case scene::Flower::BlUE:
-				m_colourBase = m_colourBaseBlue;
-				break;
-			case scene::Flower::ORANGE:
-				m_colourBase = m_colourBaseOrange;
-				break;
-			default:
-				m_colourBase = m_colourBaseOrange;
-				break;
-			}
+			float tempaturePercentage = ((float)m_nectarValue / (float)MaxNectar);
 
+			XMFLOAT4 m_colourBase = FlowerColours[m_currentColour];
+
+			m_colourBase = {	m_colourBase.x * tempaturePercentage,
+								m_colourBase.y * tempaturePercentage,
+								m_colourBase.z* tempaturePercentage, 1.0f };
+	
+			SetColour(m_colourBase);
 			m_PreviousNectarValue = m_nectarValue;
-			XMFLOAT4 colourUpdate = { m_colourBase.x * tempaturePercentage,
-									  m_colourBase.y * tempaturePercentage,
-									  m_colourBase.z * tempaturePercentage, 1.0f };
-			SetColour(colourUpdate);
 
 			if (m_nectarValue <= 0)
 			{
 				m_flowerRefill = true;
-				RandomColour();
+				m_currentColour = utils::Rand() % NumberOfColour;
+
 			}
 		}
 	}
@@ -177,48 +204,20 @@ namespace scene
 	{
 		if (m_nectarValue > 0)
 		{
-			m_nectarValue -= m_nectarReduction;
-			m_flowerScale.x = m_baseScale * ((float)m_nectarValue / (float)m_maxNectar);
-			m_flowerScale.y = m_baseScale * ((float)m_nectarValue / (float)m_maxNectar);
-			m_flowerScale.z = m_baseScale * (float)(m_nectarValue / (float)m_maxNectar);
+			m_nectarValue -= NectarReduction * utils::Timers::GetFrameTime();
+			m_flowerScale.x = m_baseScale * ((float)m_nectarValue / (float)MaxNectar);
+			m_flowerScale.y = m_baseScale * ((float)m_nectarValue / (float)MaxNectar);
+			m_flowerScale.z = m_baseScale * (float)(m_nectarValue / (float)MaxNectar);
 
 			SetScale(m_flowerScale);
+
+			//We do this to stop it refilling as its been eaten 
+			m_flowerRefill = false;
+			m_flowerSpawnTimerPrevious = m_flowerSpawnTimerCurrent;
 		}
 		else
 		{
 			m_flowerEmpty = true;
-		}
-	}
-
-	bool Flower::IsflowerEmpty()
-	{
-
-		return m_flowerEmpty;
-	}
-
-	int Flower::GetFlowerHeight()
-	{
-		return m_flowerHeight;
-	}
-
-	void Flower::RandomColour()
-	{
-		int randomColour = utils::Rand() % m_numberOfColour;
-		switch (randomColour)
-		{
-		default:
-		case 0:
-			m_colourMode = scene::Flower::PURPLE;
-			break;
-		case 1:
-			m_colourMode = scene::Flower::RED;
-			break;
-		case 2:
-			m_colourMode = scene::Flower::BlUE;
-			break;
-		case 3:
-			m_colourMode = scene::Flower::ORANGE;
-			break;
 		}
 	}
 
